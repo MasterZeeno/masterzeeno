@@ -1,26 +1,8 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-declare -A vars=(
-    [R]=31 [G]=32 [Y]=33
-    [B]=34 [M]=35 [C]=36
-    [W]=37 [BL]=30
-    [BR]=41 [BG]=42 [BY]=43
-    [BB]=44 [BM]=45 [BC]=46
-    [BW]=47 [BBL]=40
-    [RESET]=0 [BOLD]=1
-    [DIM]=2 [ITALIC]=3
-)
-
-for k in "${!vars[@]}"; do
-    v="${vars[$k]}"
-    eval "$k=\$'\e[${v}m'"
-done
-unset vars
-
 termux_desktop_path="/data/data/com.termux/files/usr/etc/termux-desktop"
 config_file="$termux_desktop_path/configuration.conf"
 log_file="/data/data/com.termux/files/home/termux-desktop.log"
-
 
 print_log () 
 { 
@@ -29,39 +11,14 @@ print_log ()
     local message="$1";
     echo "[${timestamp}] ${log_level}: ${message}" >> "$log_file"
 }
-printer ()
-{
-    local space='  '
-    local msg="${1:-}"
-    local color="${2:-$B}"
-    local icon="${3:-}"
-    
-    printf "${space}${icon}${color}%s${RESET}\n" "$msg"
-}
-create_icon ()
-{
-    if [[ -n "$1" ]]; then
-        local ldome="${2:-}\uE0B6${RESET}"
-        local rdome="${2:-}\uE0B4${RESET}"
-        local icon="${BOLD}${3:-}${4:-} $1 ${RESET}"
-        
-        echo "${RESET}${ldome}${icon}${rdome}"
-    fi
-}
 print_success ()
 {
-    local icon c="$G"
-    [[ "$1" =~ ^-ni$ ]] && shift || \
-        icon="$(create_icon '\uF00C' "$c" "$BG" "$BL") "
-    printer "${BOLD}${1^}" "$c" "$icon"
+    fancy -s "$1"
     print_log "${1^}"
 }
 print_failed ()
 {
-    local icon c="$R"
-    [[ "$1" =~ ^-ni$ ]] && shift || \
-        icon="$(create_icon '\uF00D' "$c" "$BR" "$W") "
-    printer "${BOLD}${1^}" "$c" "$icon"
+    fancy -e "$1"
     print_log "${1^}"
 }
 check_termux () 

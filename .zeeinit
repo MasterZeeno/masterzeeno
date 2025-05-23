@@ -1,0 +1,5 @@
+for f in ~/.local/zeeinit/shells/.*; do
+    source "$f"
+done
+
+export PATH="$HOME/.local/zeeinit/bin:$PATH"
