@@ -75,6 +75,7 @@ jobs:
               fi
           }
           
+          ls -A
           update_colors_var
           
     
