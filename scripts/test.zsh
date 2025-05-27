@@ -1,19 +1,42 @@
 #!/data/data/com.termux/files/usr/bin/zsh
 
 
-"https://raw.githubusercontent.com/romkatv/powerlevel10k/refs/heads/master/internal/p10k.zsh" 
-
 test() {
     local var='__p9k_colors'
-    if [[ -z "${(P)var}" ]]; then
-        local file="$ZEEDIR/cache/$var"
-        if [[ ! -s "$file" ]]; then
-            curl -s "https://raw.githubusercontent.com/romkatv/powerlevel10k/refs/heads/master/internal/p10k.zsh" | \
-                sed -n "/^typeset.*$var=(/,/)/p" > "$file"
+    local file="./cache/$var"
+    local repo_owner="romkatv"
+    local repo_name="powerlevel10k"
+    local file_path="internal/p10k.zsh"
+    
+    [[ -s "$file" ]] || echo '# v0.0.0' > "$file"
+    local current_version=$(head -n1 "$file")
+    
+        local contents=(
+            "$(get_latest_release "$repo_owner" "$repo_name")"
+            "$(view_file_online "$repo_owner" "$repo_name" "$file_path" | \
+                sed -n "/^typeset.*$var=(/,/)/p")")
+            
+            
         fi
+        local latest_release="$(get_latest_release "$repo_owner" "$repo_name")"
         source "$file"
     fi
     echo "${(P)var}"
 }
+
+get_latest_release() { 
+    local repo_owner="$1"
+    local repo_name="$2"
+    curl -s "https://api.github.com/repos/$repo_owner/$repo_name/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
+}
+
+view_file_online() {
+    local repo_owner="$1"
+    local repo_name="$2"
+    local file_path="$3"
+    curl -s "https://raw.githubusercontent.com/$repo_owner/$repo_name/refs/heads/master/$file_path"
+}
+
+# get_latest_release "romkatv" "powerlevel10k"
 
 test
