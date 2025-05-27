@@ -52,33 +52,33 @@ jobs:
           }
           
           update_colors_var() {
-              local var='__p9k_colors'
-              local file="cache/$var"
+              local file="$colors_var_path"
+              local var="${file:t}"
               mktouch "$file"
           
               local repo_owner="romkatv"
               local repo_name="powerlevel10k"
               local file_path="internal/p10k.zsh"
           
-              local current_version
-              current_version=$(head -n1 "$file" | sed -e 's/[#\s]//g')
-              local latest_version
-              latest_version=$(get_latest_release "$repo_owner" "$repo_name")
+              local current_version=$(head -n1 "$file" | sed -e 's/[#\s]//g')
+              typeset -gr latest_version=$(get_latest_release "$repo_owner" "$repo_name")
           
               if is_not_latest "$current_version" "$latest_version"; then
-                  git config --global user.name "github-actions[bot]"
-                  git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
                   echo "# $latest_version" > "$file"
                   view_file_online "$repo_owner" "$repo_name" "$file_path" | \
                       sed -n "/^typeset.*${var}=(/,/)/p" >> "$file"
-                  
-                  git add cache
-                  git commit -m "Updated to $latest_version"
-                  git push
               fi
           }
           
+          colors_var_path='cache/__p9k_colors'
           update_colors_var
+          
+          if [[ -n "$(git status --porcelain)" ]]; then
+              git config --global user.name "github-actions[bot]"
+              git config --global user.email "github-actions[bot]@users.noreply.github.com"
+              git add "$colors_var_path"
+              git commit -m "Updated to $latest_version"
+              git push
+          fi
           
     
