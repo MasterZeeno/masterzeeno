@@ -18,20 +18,21 @@ jobs:
       
       - name: Install ZSH
         run: |
-          sudo apt-get update
-          sudo apt-get install zsh
-          command -v zsh
+          if ! command -v zsh >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install zsh
+          fi
         
       - name: Run Update Colors Variable Script
         shell: /usr/bin/zsh {0}
         run: |
           mktouch() {
-            [[ -z "$1" ]] && return 1
+            [[ -z "$1" ]] && return
             mkdir -p "${1:h}" && touch "$1"
           }
           
           is_not_latest() {
-            [[ -z "$1" ]] && return 1
+            [[ -z "$1" ]] && return
             local v1="${1#v}" v2="${2#v}"
             local latest=$(printf '%s\n' "$v1" "$v2" | sort -V | tail -n1)
             [[ "$v1" != "$latest" ]]
