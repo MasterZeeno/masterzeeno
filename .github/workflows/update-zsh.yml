@@ -37,7 +37,7 @@ jobs:
           key: ${{ steps.zsh-cache.outputs.cache-primary-key }}
                 
       - name: Run Update Colors Variable Script
-        shell: ~/.local/bin/zsh {0}
+        shell: zsh {0}
         run: |
           mktouch() {
             [[ -z "$1" ]] && return
