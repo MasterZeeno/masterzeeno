@@ -27,7 +27,7 @@ jobs:
         if: steps.zsh-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/.local
-          sh -c "$(curl -fsSL https://raw.githubusercontent.com/romkatv/zsh-bin/master/install)" -- -d ~/.local
+          sh -c "$(curl -fsSL https://raw.githubusercontent.com/romkatv/zsh-bin/master/install)" -- -d ~/.local -e 'no'
           
       - name: Save cached static Zsh
         if: steps.zsh-cache.outputs.cache-hit != 'true'
