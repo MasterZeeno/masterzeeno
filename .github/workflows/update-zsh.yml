@@ -1,4 +1,4 @@
-name: Update Colors Variable - ZSH
+name: Update Colors Variable - Zsh
 
 on:
   # schedule:
@@ -39,16 +39,13 @@ jobs:
       - name: Run Update Colors Variable Script
         shell: zsh {0}
         run: |
-          mktouch() {
-            [[ -z "$1" ]] && return
-            mkdir -p "${1:h}" && touch "$1"
+          sort_versions() {
+            printf '%s\n' "$@" | sort -V | tail -n1
           }
           
-          is_not_latest() {
-            [[ -z "$1" ]] && return
-            local v1="${1#v}" v2="${2#v}"
-            local latest=$(printf '%s\n' "$v1" "$v2" | sort -V | tail -n1)
-            [[ "$v1" != "$latest" ]]
+          is_latest() {
+            [[ -z "$1" || -z "$2" ]] && return 1
+            [[ "$1" == "$(sort_versions "$1" "$2")" ]]
           }
           
           get_latest_release() {
@@ -67,13 +64,15 @@ jobs:
           push_repo() {
             git diff --quiet && return
             
-            local name="$1"
-            local email="$2"
+            local name="${1:-$USER_NAME}"
+            local email="${2:-$USER_EMAIL}"
+            [[ "$email" =~ ^@ ]] && email="$name$email"
+            
             shift $(( $# > 2 ? 2 : $# ))
             
             git config --global user.name "$name"
             git config --global user.email "$email"
-          
+            
             local -a to_add=() msgs=()
             for arg in "$@"; do
               [[ -e "$arg" ]] && to_add+=("$arg") || msgs+=("$arg")
@@ -85,27 +84,34 @@ jobs:
             git push
           }
           
-          update_colors_var() {
-              local file="${1:-cache/__p9k_colors}"
-              local var="${file:t}"
-              mktouch "$file"
-          
-              local repo_owner="romkatv"
-              local repo_name="powerlevel10k"
-              local file_path="internal/p10k.zsh"
-          
-              local current_version=$(head -n1 "$file" | sed -e 's/[#\s]//g')
-              local latest_version=$(get_latest_release "$repo_owner" "$repo_name")
-          
-              if is_not_latest "$current_version" "$latest_version"; then
-                  echo "# $latest_version" > "$file"
-                  view_file_online "$repo_owner" "$repo_name" "$file_path" | \
-                      sed -n "/^typeset.*${var}=(/,/)/p" >> "$file"
-              fi
-              
-              local pusher="github-actions[bot]"
-              push_repo "$pusher" "$pusher@users.noreply.github.com" "$file" "Updated to: $latest_version"
+          get_curr_version() {
+            [[ -f "$1" ]] || return
+            head -n1 "$1" | sed 's/[#\s]//g'
           }
           
-          update_colors_var
+          update_colors_var() {
+            local varfilepath="$1"
+            mkdir -p "${varfilepath:h}"
+            touch "$varfilepath"
+          
+            local repo_owner="romkatv"
+            local repo_name="powerlevel10k"
+            local filepath="internal/p10k.zsh"
+          
+            local current_version=$(get_curr_version "$varfilepath")
+            local latest_version=$(get_latest_release "$repo_owner" "$repo_name")
+          
+            if ! is_latest "$current_version" "$latest_version"; then
+                echo "# $latest_version" > "$varfilepath"
+                view_varfilepath_online "$repo_owner" "$repo_name" "$filepath" | \
+                    sed -n "/^typeset.*${varfilepath:t}=(/,/)/p" >> "$varfilepath"
+            fi
+          }
+          
+          VARFILEPATH="cache/__p9k_colors"
+          update_colors_var "$VARFILEPATH"
+          push_repo "github-actions[bot]" "@users.noreply.github.com" \
+            "$VARFILEPATH" "Updated to: $(get_curr_version "$VARFILEPATH")"
+          
+                    
           

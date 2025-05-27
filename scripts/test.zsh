@@ -1,83 +1,39 @@
-#!/data/data/com.termux/files/usr/bin/zsh
+#!/bin/zsh
 
+sort_versions() {
+  printf '%s\n' "$@" | sort -V | tail -n1
+}
 
-# test() {
-    # local var='__p9k_colors'
-    # local file="./cache/$var"
-    # local repo_owner="romkatv"
-    # local repo_name="powerlevel10k"
-    # local file_path="internal/p10k.zsh"
-    
-    # [[ -s "$file" ]] || echo '# v0.0.0' > "$file"
-    # local current_version=$(head -n1 "$file")
-    
-        # local contents=(
-            # "$(get_latest_release "$repo_owner" "$repo_name")"
-            # "$(view_file_online "$repo_owner" "$repo_name" "$file_path" | \
-                # sed -n "/^typeset.*$var=(/,/)/p")")
-            
-            
-        # fi
-        # local latest_release="$(get_latest_release "$repo_owner" "$repo_name")"
-        # source "$file"
-    # fi
-    # echo "${(P)var}"
-# }
+is_latest() {
+  [[ -z "$1" || -z "$2" ]] && return 1
+  [[ "$1" == "$(sort_versions "$1" "$2")" ]]
+}
 
-# get_latest_release() { 
-    # local repo_owner="$1"
-    # local repo_name="$2"
-    # curl -s "https://api.github.com/repos/$repo_owner/$repo_name/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
-# }
+get_latest_release() {
+  local repo_owner="$1"
+  local repo_name="$2"
+  curl -s "https://api.github.com/repos/$repo_owner/$repo_name/releases/latest" | grep -oE '"tag_name": *"[^"]+"' | cut -d'"' -f4
+}
 
-# get_latest_release 'romkatv' 'zsh-bin'
-
-# view_file_online() {
-    # local repo_owner="$1"
-    # local repo_name="$2"
-    # local file_path="$3"
-    # curl -s "https://raw.githubusercontent.com/$repo_owner/$repo_name/refs/heads/master/$file_path"
-# }
-
-# # get_latest_release "romkatv" "powerlevel10k"
-
-# test
-
-
-# url='https://raw.githubusercontent.com/romkatv/zsh-bin/refs/heads/master/build'
-# aria2c -x 16 -s 64 -j 1 \
-  # --max-tries=3 --retry-wait=2 -d "." "$url"
-
-# push_repo() {
-  # local name="${1:-github-actions[bot]}"
-  # local email="${2:-$name@users.noreply.github.com}"
-  # local -i i=$#; ((i>2)) && i=2; (($#)) && shift $i
-  
-  # local -a unstaged=($(git diff --name-only))
-  # local -a to_add msgs
-  # for arg in "$@"; do
-    # [[ -e "$arg" ]] && to_add+=("$arg") || msgs+=("$arg")
-  # done
-
-  # for p in name email; do
-    # git config --global user.$p "${(P)p}"
-  # done
-  
-  # git add "${to_add[@]:-${unstaged[@]}}"
-  # git commit -m "${msgs[*]:-Updated on: $(date)}"
-  # git push
-# }
+view_file_online() {
+  local repo_owner="$1"
+  local repo_name="$2"
+  local file_path="$3"
+  curl -s "https://raw.githubusercontent.com/$repo_owner/$repo_name/refs/heads/master/$file_path"
+}
 
 push_repo() {
   git diff --quiet && return
   
-  local name="${1:-github-actions[bot]}"
-  local email="${2:-$name@users.noreply.github.com}"
+  local name="${1:-$USER_NAME}"
+  local email="${2:-$USER_EMAIL}"
+  [[ "$email" =~ ^@ ]] && email="$name$email"
+  
   shift $(( $# > 2 ? 2 : $# ))
   
   git config --global user.name "$name"
   git config --global user.email "$email"
-
+  
   local -a to_add=() msgs=()
   for arg in "$@"; do
     [[ -e "$arg" ]] && to_add+=("$arg") || msgs+=("$arg")
@@ -89,12 +45,31 @@ push_repo() {
   git push
 }
 
-typeset -a args
-(($#)) && args=("$@") || \
-  args=(
-    'masterzeeno'
-    'zeenoliev@gmail.com'
-    '../cache/__p9k_colors'
-    'Updated to: v1.20.0'
-  )
-push_repo "${args[@]}"
+get_curr_version() {
+  [[ -f "$1" ]] || return
+  head -n1 "$1" | sed 's/[#\s]//g'
+}
+
+update_colors_var() {
+  local varfilepath="$1"
+  mkdir -p "${varfilepath:h}"
+  touch "$varfilepath"
+
+  local repo_owner="romkatv"
+  local repo_name="powerlevel10k"
+  local filepath="internal/p10k.zsh"
+
+  local current_version=$(get_curr_version "$varfilepath")
+  local latest_version=$(get_latest_release "$repo_owner" "$repo_name")
+
+  if ! is_latest "$current_version" "$latest_version"; then
+      echo "# $latest_version" > "$varfilepath"
+      view_varfilepath_online "$repo_owner" "$repo_name" "$filepath" | \
+          sed -n "/^typeset.*${varfilepath:t}=(/,/)/p" >> "$varfilepath"
+  fi
+}
+
+VARFILEPATH="cache/__p9k_colors"
+update_colors_var "$VARFILEPATH"
+push_repo "github-actions[bot]" "@users.noreply.github.com" \
+  "$VARFILEPATH" "Updated to: $(get_curr_version "$VARFILEPATH")"
