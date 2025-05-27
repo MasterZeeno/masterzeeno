@@ -4,6 +4,19 @@ termux_desktop_path="/data/data/com.termux/files/usr/etc/termux-desktop"
 config_file="$termux_desktop_path/configuration.conf"
 log_file="/data/data/com.termux/files/home/termux-desktop.log"
 
+setup_git ()
+{
+    command pkg update
+    command pkg upgrade -y
+    command pkg install git gh -y
+    
+    git config --global user.name "$GITHUB_USER_NAME"
+    git config --global user.email "$GITHUB_USER_EMAIL"
+    
+    gh config set -h github.com git_protocol https
+    echo "$1" | gh auth login --with-token
+}
+
 print_log () 
 { 
     local timestamp="$(date '+%Y-%m-%d %H:%M:%S')";
