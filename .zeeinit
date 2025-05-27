@@ -1,5 +1,22 @@
-for f in ~/.local/zeeinit/shells/.*; do
-    source "$f"
-done
+export USER_NAME="MasterZeeno"
+export USER_EMAIL="zeenoliev@gmail.com"
+export ZEEDIR="$HOME/.local/${(L)USER_NAME}"
 
-export PATH="$HOME/.local/zeeinit/bin:$PATH"
+{
+    for sub in shells bin; do
+        dir="$ZEEDIR/$sub"
+        command mkdir -p "$dir"
+
+        for file in "$dir"/*(N-.); do
+            if [[ $sub == "bin" ]]; then
+                command chmod +x "$file"
+            else
+                builtin source "$file"
+            fi
+        done
+
+        if [[ $sub == "bin" && ":$PATH:" != *":$dir:"* ]]; then
+            export PATH="$dir:$PATH"
+        fi
+    done
+}

@@ -1,5 +1,6 @@
-alias print_success='fancy -s'
-alias print_error='fancy -e'
-alias print_warning='fancy -w'
+alias print_success='fancy -S'
+alias print_error='fancy -E'
+alias print_warning='fancy -W'
+alias print_info='fancy -I'
 
 alias zp='mkdirg ~/projects && ls --sort=newest --group-directories-first'
