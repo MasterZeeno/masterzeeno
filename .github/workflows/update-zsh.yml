@@ -81,6 +81,4 @@ jobs:
               git push
           fi
           
-    # https://raw.githubusercontent.com/Zackptg5/Cross-Compiled-Binaries-Android/refs/heads/master/zsh/etc.zip
-    # https://raw.githubusercontent.com/Zackptg5/Cross-Compiled-Binaries-Android/refs/heads/master/zsh/usr.zip
-    # https://raw.githubusercontent.com/Zackptg5/Cross-Compiled-Binaries-Android/refs/heads/master/zsh/zsh-arm64
+    # https://raw.githubusercontent.com/romkatv/zsh-bin/refs/heads/master/install
