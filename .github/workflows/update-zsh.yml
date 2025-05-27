@@ -19,7 +19,7 @@ jobs:
       - name: Install ZSH
         run: |
           sudo apt-get update
-          sudo apt-install zsh
+          sudo apt-get install zsh
           command -v zsh
         
       - name: Run Update Colors Variable Script
