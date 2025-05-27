@@ -174,7 +174,7 @@ check_and_restore ()
     fi;
     print_log "$target_path $dir $base_name $latest_backup"
 }
-detact_package_manager () 
+detect_package_manager () 
 { 
     source "/data/data/com.termux/files/usr/bin/termux-setup-package-manager";
     if [[ "$TERMUX_APP_PACKAGE_MANAGER" == "apt" ]]; then
@@ -557,16 +557,3 @@ print_to_config ()
     fi;
     print_log "$var_name $var_value"
 }
-
-declare -A vars=(
-    [R]=31 [G]=32 [Y]=33
-    [B]=34 [M]=35 [C]=36
-    [RESET]=0 [BOLD]=1
-    [DIM]=2 [ITALIC]=3
-)
-
-for k in "${!vars[@]}"; do
-    v="${vars[$k]}"
-    echo "$k = $v"
-done
-
