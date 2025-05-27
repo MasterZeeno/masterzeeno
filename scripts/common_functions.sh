@@ -28,12 +28,12 @@ print_log ()
 }
 print_success ()
 {
-    fancy -s "$1"
+    fancy -S "$1"
     print_log "${1^}"
 }
 print_failed ()
 {
-    fancy -e "$1"
+    fancy -E "$1"
     print_log "${1^}"
 }
 check_termux () 
