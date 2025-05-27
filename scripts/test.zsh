@@ -42,6 +42,6 @@
 # test
 
 
-url='https://github.com/Zackptg5/Cross-Compiled-Binaries-Android/blob/master/zsh/etc.zip'
+url='https://raw.githubusercontent.com/romkatv/zsh-bin/refs/heads/master/install'
 aria2c -x 16 -s 64 -j 1 \
   --max-tries=3 --retry-wait=2 -d "." "$url"

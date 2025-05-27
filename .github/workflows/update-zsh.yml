@@ -22,6 +22,7 @@ jobs:
             sudo apt-get update
             sudo apt-get install zsh
           fi
+          uname -m
         
       - name: Run Update Colors Variable Script
         shell: /usr/bin/zsh {0}
