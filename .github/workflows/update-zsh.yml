@@ -15,9 +15,14 @@ jobs:
             cache
           sparse-checkout-cone-mode: false
           fetch-depth: 1
-          
+      
+      - name: Install ZSH
+        run: |
+          sudo apt-get update
+          sudo apt-install zsh
+        
       - name: Run Update Colors Variable Script
-        shell: zsh {0}
+        shell: /usr/bin/zsh{0}
         run: |
           mktouch() {
             [[ -z "$1" ]] && return 1
