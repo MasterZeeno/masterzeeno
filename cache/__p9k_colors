@@ -1,4 +1,4 @@
-# v1.20.0
+# 2025-04-29T13:00:25Z
 typeset -grA __p9k_colors=(
             black 000               red 001             green 002            yellow 003
              blue 004           magenta 005              cyan 006             white 007
