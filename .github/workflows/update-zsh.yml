@@ -20,9 +20,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-install zsh
+          command -v zsh
         
       - name: Run Update Colors Variable Script
-        shell: /usr/bin/zsh{0}
+        shell: /usr/bin/zsh {0}
         run: |
           mktouch() {
             [[ -z "$1" ]] && return 1
