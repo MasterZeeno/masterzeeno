@@ -6,15 +6,17 @@ log_file="/data/data/com.termux/files/home/termux-desktop.log"
 
 setup_git ()
 {
-    command pkg update
-    command pkg upgrade -y
-    command pkg install git gh -y
+    package_install_and_check git gh -y
     
-    git config --global user.name "$GITHUB_USER_NAME"
-    git config --global user.email "$GITHUB_USER_EMAIL"
+    local USER_NAME="${1:-MasterZeeno}"
+    local USER_EMAIL="${2:-zeenoliev@gmail.com}"
+    local TOKEN="${3:-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}"
+
+    git config --global user.name "$USER_NAME"
+    git config --global user.email "$USER_EMAIL"
     
     gh config set -h github.com git_protocol https
-    echo "$1" | gh auth login --with-token
+    echo "$TOKEN" | gh auth login --with-token
 }
 
 print_log () 
