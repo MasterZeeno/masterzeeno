@@ -35,17 +35,13 @@ jobs:
         with:
           path: ~/.local
           key: ${{ steps.zsh-cache.outputs.cache-primary-key }}
-                
+      
       - name: Run Update Colors Variable Script
         shell: zsh {0}
         run: |
-          sort_versions() {
-            printf '%s\n' "$@" | sort -V | tail -n1
-          }
-          
           is_latest() {
             [[ -z "$1" || -z "$2" ]] && return 1
-            [[ "$1" == "$(sort_versions "$1" "$2")" ]]
+            [[ "$1" == "$(printf '%s\n' "$1" "$2" | sort -V | tail -n1)" ]]
           }
           
           get_latest_release() {
@@ -84,11 +80,6 @@ jobs:
             git push
           }
           
-          get_curr_version() {
-            [[ -f "$1" ]] || return
-            head -n1 "$1" | sed 's/[#\s]//g'
-          }
-          
           update_colors_var() {
             local varfilepath="$1"
             mkdir -p "${varfilepath:h}"
@@ -98,20 +89,20 @@ jobs:
             local repo_name="powerlevel10k"
             local filepath="internal/p10k.zsh"
           
-            local current_version=$(get_curr_version "$varfilepath")
+            local current_version=$(head -n1 "$varfilepath" | sed 's/[#\s]//g')
             local latest_version=$(get_latest_release "$repo_owner" "$repo_name")
           
             if ! is_latest "$current_version" "$latest_version"; then
                 echo "# $latest_version" > "$varfilepath"
-                view_varfilepath_online "$repo_owner" "$repo_name" "$filepath" | \
+                view_file_online "$repo_owner" "$repo_name" "$filepath" | \
                     sed -n "/^typeset.*${varfilepath:t}=(/,/)/p" >> "$varfilepath"
+              
+              push_repo "github-actions[bot]" "@users.noreply.github.com" \
+                "$varfilepath" "Updated to: $latest_version"
             fi
           }
           
-          VARFILEPATH="cache/__p9k_colors"
-          update_colors_var "$VARFILEPATH"
-          push_repo "github-actions[bot]" "@users.noreply.github.com" \
-            "$VARFILEPATH" "Updated to: $(get_curr_version "$VARFILEPATH")"
+          update_colors_var "cache/__p9k_colors"
           
                     
           
