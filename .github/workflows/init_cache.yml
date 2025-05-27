@@ -1,0 +1,30 @@
+name: Install and Cache Zsh
+
+on:
+  workflow_dispatch:
+
+jobs:
+  install-zsh:
+    runs-on: ubuntu-latest
+    steps:
+      name: Caching Primes
+
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/cache@v4
+      id: zsh-cache
+      with:
+        path: ~/.local
+        key: ${{ runner.os }}-zsh-static
+
+    - name: Install static Zsh
+      if: steps.zsh-cache.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p ~/.local
+        sh -c "$(curl -fsSL https://raw.githubusercontent.com/romkatv/zsh-bin/master/install)" -- -d ~/.local
+        

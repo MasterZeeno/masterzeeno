@@ -48,29 +48,7 @@ else
   readonly _Y=
 fi
 
-if [ -t 0 -a -t 1 ]; then
-  read_choice() {
-    choice=''
-    stty -icanon min 1 time 0
-    while :; do
-      c="$(dd bs=1 count=1 2>/dev/null && echo x)"
-      choice="$choice${c%x}"
-      n="$(printf '%s' "$choice" | wc -m)"
-      [ "$n" -eq 0 ] || break
-    done
-    stty "$saved_tty_settings"
-    [ "$choice" = "$lf" ] || echo
-  }
-  cleanup1() {
-    trap - INT TERM EXIT
-    stty "$saved_tty_settings"
-  }
-  saved_tty_settings="$(stty -g)"
-  trap cleanup1 INT TERM EXIT
-else
-  read_choice() { IFS= read -r choice; }
-  cleanup1() { :; }
-fi
+choice=2
 
 usage="$(cat <<END
 Usage: install [OPTIONS] [-a <sha256|md5>]...
