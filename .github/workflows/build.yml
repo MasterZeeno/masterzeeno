@@ -1,0 +1,44 @@
+name: Build Figlet (Static Cross-Platform)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Needed to upload release assets
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            builds/figlet
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - name: Build static binaries in Docker
+        run: |
+          cd builds/figlet
+          docker build -t figlet-builder .
+          container_id=$(docker create figlet-builder)
+          docker cp $container_id:/builds ./builds
+          docker rm $container_id
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: figlet-binaries
+          path: builds/*
+
+      - name: Upload binaries to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            builds/figlet-x86_64
+            builds/figlet-aarch64
+            builds/figlet-armv7
