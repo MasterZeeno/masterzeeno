@@ -4,6 +4,49 @@ termux_desktop_path="/data/data/com.termux/files/usr/etc/termux-desktop"
 config_file="$termux_desktop_path/configuration.conf"
 log_file="/data/data/com.termux/files/home/termux-desktop.log"
 
+# Download a file given the Google Drive URL
+function gdrivedl() {
+    local CONFIRM FILE_ID URL
+    URL="${1}"
+    shift
+    if [[ ${URL:?} =~ folders ]]; then
+        FILE_ID="$(echo "${URL}" | sed -r -e 's/https.*folders\/(.*)/\1/' -e 's/(.*)\?usp=sharing/\1/')"
+    else
+        FILE_ID="$(echo "${URL:?}" | sed -r -e 's/(.*)&export.*/\1/' -e 's/https.*id=(.*)/\1/' -e 's/https.*\/d\/(.*)\/view/\1/')"
+    fi
+    CONFIRM=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate "https://docs.google.com/uc?export=download&id=$FILE_ID" -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')
+    aria2c --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$CONFIRM&id=$FILE_ID"
+    rm -rf /tmp/cookies.txt
+}
+
+# Upload to GDrive
+function gdriveul() {
+    local FILE MD5 ZIP_SIZE GDRIVE_UPLOAD_URL GDRIVE_UPLOAD_ID UPLOAD_INFO PARENT
+    FILE="${1}"
+    [ -f "${FILE:?}" ] || {
+        echo "Specified file doesn't exist"
+        return
+    }
+    PARENT="${2}"
+    if [[ -n ${PARENT} ]]; then
+        PARENT="-p ${PARENT}"
+    fi
+    ZIP_SIZE="$(du -h "${FILE}" | awk '{print $1}')"
+    MD5="$(md5sum "${FILE}" | awk '{print $1}')"
+    while [ -z "${GDRIVE_UPLOAD_URL}" ]; do
+        GDRIVE_UPLOAD_URL="$(eval gdrive upload --share "${FILE}" "${PARENT}" | awk '/https/ {print $7}')"
+    done
+    GDRIVE_UPLOAD_ID="$(echo "${GDRIVE_UPLOAD_URL}" | sed -r -e 's/(.*)&export.*/\1/' -e 's/https.*id=(.*)/\1/' -e 's/https.*\/d\/(.*)\/view/\1/')"
+    UPLOAD_INFO="
+File: [$(basename "${FILE}")](${GDRIVE_UPLOAD_URL})
+Size: ${ZIP_SIZE}
+MD5: \`${MD5}\`
+GDrive ID: \`${GDRIVE_UPLOAD_ID}\`
+"
+    tgm "${UPLOAD_INFO}"
+    echo "Get the file with ${GDRIVE_UPLOAD_ID}"
+}
+
 setup_git ()
 {
     package_install_and_check git gh -y

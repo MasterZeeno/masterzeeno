@@ -9,14 +9,14 @@ export ZEEDIR="$HOME/.local/${(L)USER_NAME}"
 
         for file in "$dir"/*(N-.); do
             if [[ $sub == "bin" ]]; then
-                command chmod +x "$file"
+                command chmod a+rwx "$file"
             else
                 builtin source "$file"
             fi
         done
 
         if [[ $sub == "bin" && ":$PATH:" != *":$dir:"* ]]; then
-            export PATH="$dir:$PATH"
+            builtin export PATH="$dir:$PATH"
         fi
     done
 }
