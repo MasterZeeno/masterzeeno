@@ -9,10 +9,10 @@ RUN apt update && apt install -y \
 
 WORKDIR /src
 
-RUN curl -LO https://ftp.de.debian.org/debian/pool/main/f/figlet/figlet_2.2.5.orig.tar.gz && \
-    tar xf figlet_2.2.5.orig.tar.gz && \
+RUN curl -LO ftp://ftp.figlet.org/pub/figlet/program/unix/figlet-2.2.5.tar.gz && \
+    tar xf figlet-2.2.5.tar.gz && \
     mv figlet-2.2.5 figlet && \
-    rm figlet_2.2.5.orig.tar.gz
+    rm figlet-2.2.5.tar.gz
 
 WORKDIR /src/figlet
 
