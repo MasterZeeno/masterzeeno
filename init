@@ -1,22 +1,22 @@
-export USER_NAME="MasterZeeno"
-export USER_EMAIL="zeenoliev@gmail.com"
-export ZEEDIR="$HOME/.local/${(L)USER_NAME}"
+# export USER_NAME="MasterZeeno"
+# export USER_EMAIL="zeenoliev@gmail.com"
+# export ZEEDIR="$HOME/.local/${(L)USER_NAME}"
 
-{
-    for sub in shells bin; do
-        dir="$ZEEDIR/$sub"
-        command mkdir -p "$dir"
+# {
+  # for sub in shells bin; do
+      # dir="$ZEEDIR/$sub"
+      # command mkdir -p "$dir"
 
-        for file in "$dir"/*(N-.); do
-            if [[ $sub == "bin" ]]; then
-                command chmod a+rwx "$file"
-            else
-                builtin source "$file"
-            fi
-        done
+      # for file in "$dir"/*(N-.); do
+          # if [[ $sub == "bin" ]]; then
+              # command chmod a+rwx "$file"
+          # else
+              # builtin source "$file"
+          # fi
+      # done
 
-        if [[ $sub == "bin" && ":$PATH:" != *":$dir:"* ]]; then
-            builtin export PATH="$dir:$PATH"
-        fi
-    done
-}
+      # if [[ $sub == "bin" && ":$PATH:" != *":$dir:"* ]]; then
+          # builtin export PATH="$dir:$PATH"
+      # fi
+  # done
+# }
