@@ -1,69 +1,102 @@
 #!/usr/bin/env bash
 
-# Exit immediately if not sourced
-(return 0 2>/dev/null) || exit 1
+[ -z "${BASH_VERSION:-}" ] && exit 1
+(return 0 2>/dev/null) && exit 1
 
-BUILD_TOOLS_PATH="$HOME/.android/build-tools"
-rm -rf "$BUILD_TOOLS_PATH"
-mkdir -p "$BUILD_TOOLS_PATH"
+fetch() {
+  local url="${1:?}" && shift
+  local -a flags=("$@")
+  local -a cflags=(
+    --fail --location --retry-connrefused --styled-output --progress-bar
+    --retry 5 --retry-delay 5 --connect-timeout 30 --retry-max-time 120 
+    --speed-limit 1000 --speed-time 60
+  )
+  curl "${cflags[@]}" "${flags[@]}" "$url"
+}
 
-unset ANDROID_HOME NDK
+finder() {
+  local dir="${1:?}"
+  mkdir -p "$dir" || return 1
+  
+  find -P "$dir" -mindepth 1 -type "${3:-d}" -iname "${2:-*}" -print -quit
+}
 
-for VAR in ANDROID_HOME NDK; do
-  [[ -n "${!VAR}" ]] && continue  # Skip if variable is already set
+latest_zip() {
+  fetch "$ANDROID_HOMEURL/${1:?}" --silent \
+    | grep -Eoim1 "${2:?}.*${PLATFORM}.*\.zip"
+}
 
-  url="https://developer.android.com/"
-  tool_path="$BUILD_TOOLS_PATH/android-"
+sticky_export() {
+  local var="${1:?}"
+  local val="'${2:?}'"
+  
+  if ! grep -q "export ${var}=${val}" "$SHELLRC"; then
+    sed -Ei "/^.*export ${var}=/d" "$SHELLRC"
+    echo "export ${var}=${val}" >> "$SHELLRC"
+    export "${var}=${val}"
+  fi
+}
 
-  if [[ "$VAR" == "NDK" ]]; then
-    url+="ndk/downloads"
-    locator="android-ndk"
-    tool_path+="ndk"
+SHELLRC="$HOME/.${SHELL##*/}rc"
+ANDROID_TOOLS_ROOT="$HOME/.android"
+TMPDIR="${TMPDIR:-$HOME/.tmp}"
+
+PLATFORM=$(uname -s)
+SDK_REVISION=9123335
+NDK_REVISION=r27c
+TOOLS_VERSION=33.0.1
+
+[[ "$1" == "-f" || "$1" == "--force" ]] && \
+  rm -rf "$ANDROID_TOOLS_ROOT"
+
+mkdir -p "$ANDROID_TOOLS_ROOT" "$TMPDIR" || exit 1
+
+ANDROID_HOMEURL="https://developer.android.com"
+ANDROID_REPOURL="https://dl.google.com/android/repository"
+
+for VAR in SDK NDK; do
+  [[ ! -v "$VAR" || ! -e "${!VAR}" || \
+    -z "$(finder "$ANDROID_TOOLS_ROOT")" ]] || continue
+  
+  TOOLPATH="$ANDROID_TOOLS_ROOT/android-${VAR,,}"
+  mkdir -p "$TOOLPATH" || exit 1
+
+  if [[ "$VAR" == 'NDK' ]]; then
+    FILENAME="android-ndk-${NDK_REVISION}-${PLATFORM,,}"
   else
-    url+="studio#command-tools"
-    locator="commandlinetools"
-    tool_path+="sdk"
+    FILENAME="commandlinetools-${PLATFORM,,}-${SDK_REVISION}_latest"
   fi
-
-  zip_file=$(curl -s "$url" | grep -Eoim1 \
-    "${locator}.*linux.*\.zip")
-    
-  [[ -z "$zip_file" ]] && \
-    { echo "Failed to locate $locator zip"; return 1; }
-
-  curl \
-    --fail \
-    --retry 5 \
-    --retry-connrefused \
-    --retry-delay 5 \
-    --connect-timeout 30 \
-    --retry-max-time 120 \
-    --speed-limit 1000 \
-    --speed-time 60 \
-    --location \
-    --output "${tool_path}.zip" \
-    "https://dl.google.com/android/repository/${zip_file}"
-
-  [[ -f "$zip_path" ]] || \
-    { echo "Download failed for $zip_path"; return 1; }
-
-  mkdir -p "$tool_path"
-  unzip -q "${tool_path}.zip" -d "$tool_path"
-  rm -rf "${tool_path}.zip" "${tool_path}/sources/cxx-stl/system"
-
-  export "$VAR=$tool_path"
-
-  if ! grep -q "export $VAR=" "$HOME/.bashrc"; then
-    echo "export $VAR=$tool_path" >> "$HOME/.bashrc"
+  
+  OUTPUTFILE="${TMPDIR}/${FILENAME}.zip"; RETRIES=0
+  
+  while [[ ! -s "$OUTPUTFILE" ]]; do
+    fetch "$ANDROID_REPOURL/${FILENAME}.zip" --output "$OUTPUTFILE"
+    ((RETRIES++)); ((RETRIES>3)) && return 1
+  done
+  
+  unzip -oq "$OUTPUTFILE" -d "$TOOLPATH"
+  TOOLDIR=$(finder "$TOOLPATH")
+  
+  if [[ "$VAR" == "NDK" ]]; then
+    mv -f "$TOOLDIR"/* "$TOOLPATH"/
+    rm -rf "$TOOLDIR" "$(finder "$TOOLPATH/sources" 'system')"
+  else
+    mkdir -p "$TOOLPATH/latest"
+    mv -f "$TOOLDIR"/* "$TOOLPATH/latest"/
+    mv -f "$TOOLPATH/latest" "$TOOLDIR"/
   fi
+  
+  printf '%s\n' {'ANDROID_',}"${VAR}"{'_ROOT',} \
+    | while IFS= read -r XVAR; do
+      sticky_export "$XVAR" "$TOOLPATH"
+    done
 done
 
-# Locate sdkmanager binary
-SDK_MANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
-  -type f -name 'sdkmanager' | head -n1)
+sticky_export "ANDROID_HOME" "$ANDROID_SDK_ROOT"
+SDK_MANAGER=$(finder "$ANDROID_HOME" 'sdkmanager' f)
 
-[[ -z "$SDK_MANAGER" ]] && \
-  { echo "sdkmanager not found"; return 1; }
+[[ -x "$SDK_MANAGER" ]] || \
+  { echo "'sdkmanager' no execute permissions or not found"; exit 1; }
 
 yes | "$SDK_MANAGER" \
   --sdk_root="$ANDROID_HOME" \
@@ -71,6 +104,7 @@ yes | "$SDK_MANAGER" \
 
 yes | "$SDK_MANAGER" \
   --sdk_root="$ANDROID_HOME" \
-	"platform-tools" \
-	"build-tools;33.0.1" \
-	"platforms;android-"{35,28,24}
+  "platform-tools" \
+  "build-tools;${TOOLS_VERSION}" \
+  "platforms;android-"{24,28,35}
+  
