@@ -1,81 +1,83 @@
-#!/usr/bin/env bash
-
-fetch() {
-	local type=${1:?}
-	local url=${2:?}
-
-	[[ "$url" =~ ^https://(/[^/]+)+$ ]] || url=https://${url}
-
-	local -a opts=(
-		--fail               # Consider 4xx and 5xx responses as failures
-		--retry 5            # Retry up to 5 times on transient failures
-		--retry-connrefused  # Also retry on refused connections
-		--retry-delay 5      # Wait 5 seconds between retries
-		--connect-timeout 30 # Wait at most 30 seconds for a connection to be established
-		--retry-max-time 120 # Stop retrying if it's still failing after 120 seconds
-		--speed-limit 1000   # Expect at least 1000 Bytes per second
-		--speed-time 60      # Fail if the minimum speed isn't met for at least 60 seconds
-		--location           # Follow redirects
-		--silent
-	)
-
-	curl ${opts[@]} ${url} | \
-	{
-		case "$type" in
-			-s) sha256sum | awk '{print $1}' ;;
-			-v) jq -r '.[0].name' | sed 's/^[vV]//' ;;
-		esac
-	}
+_fc() {
+  s="${1:?}" i="${2:-}"
+  case "$i" in
+    0) echo "$s" | \
+      tr '[:upper:]' '[:lower:]'
+      return ;;
+    [0-9]*) ;; *) i=${#s} ;;
+  esac
+  echo "$s" | sed -E "s/^(.{0,$i})/\U\1/"
+  unset s i
 }
 
-REPO_OWNER=MasterZeeno
-REPO_EMAIL=${REPO_OWNER,,}@outlook.com
-REPO_NAME=fancy
-REPO=${REPO_OWNER}/${REPO_NAME}
-DOMAIN=github.com
-TAGS_URL=https://api.${DOMAIN}/repos/${REPO}/tags
+_DIST_REPO_OWNER='MasterZeeno'
+_DIST_REPO_NAME='fancy'
+_SRC_REPO_OWNER='sharkdp'
+_SRC_REPO_NAME='pastel'
+_SRC_REPO="https://github.com/${_SRC_REPO_OWNER}/${_SRC_REPO_NAME}"
+_SRC_TOML_URL="https://raw.githubusercontent.com/${_SRC_REPO_OWNER}/${_SRC_REPO_NAME}/refs/heads/master/Cargo.toml"
+_SRC_TOML="${TMPDIR}/$(basename "${_SRC_TOML_URL}")"
+while [ ! -s "${_SRC_TOML}" ]; do curl -sL -o "${_SRC_TOML}" "${_SRC_TOML_URL}"; done
+for j in description version license author; do case "$j" in author) q="${j}s[0]"; j=$(_fc "_SRC_${j}") ;; *) q="$j"; j=$(_fc "TERMUX_PKG_${j}") ;; esac
+eval $(cargo metadata --format-version 1 --no-deps --manifest-path="${_SRC_TOML}" | jq -r ".packages[0] | \"${j}='\(.${q})'\""); done; unset j q; rm -rf "${_SRC_TOML}"
 
-TERMUX_PKG_HOMEPAGE=https://${DOMAIN}/${REPO}
-TERMUX_PKG_DESCRIPTION="A command-line tool to generate, analyze, convert and manipulate colors"
-TERMUX_PKG_LICENSE="MIT"
-TERMUX_PKG_LICENSE_FILE="LICENSE-MIT, LICENSE-APACHE"
-TERMUX_PKG_MAINTAINER="${REPO_OWNER} <${REPO_EMAIL}>"
-TERMUX_PKG_VERSION=$(fetch -v "${TAGS_URL}")
-TERMUX_PKG_SRCURL=${TERMUX_PKG_HOMEPAGE}/archive/refs/tags/v${TERMUX_PKG_VERSION}.tar.gz
-TERMUX_PKG_SHA256=$(fetch -s ${TERMUX_PKG_SRCURL})
+TERMUX_PKG_HOMEPAGE="https://github.com/${_DIST_REPO_OWNER}/${_DIST_REPO_NAME}"
+TERMUX_PKG_LICENSE_FILE=$(_fc "${TERMUX_PKG_LICENSE%-*}" | sed 's|[^/]*|LICENSE-&|g;s|/|, |g')
+TERMUX_PKG_LICENSE="${TERMUX_PKG_LICENSE%/*}"
+TERMUX_PKG_MAINTAINER="${_DIST_REPO_OWNER} $(_fc "<${_DIST_REPO_OWNER}@outlook.com>" 0)"
+TERMUX_PKG_SRCURL="${_SRC_REPO}/archive/refs/tags/v${TERMUX_PKG_VERSION}.tar.gz"
+TERMUX_PKG_SHA256=$(curl -sL ${TERMUX_PKG_SRCURL} | sha256sum | awk '{print $1}')
 TERMUX_PKG_AUTO_UPDATE=true
 TERMUX_PKG_BUILD_IN_SRC=true
 
 termux_step_pre_configure() {
-	termux_setup_rust
+  find -P "$TERMUX_PKG_SRCDIR" -mindepth 1 \
+    | while IFS= read -r _ITEM; do
+      [ -w "$_ITEM" ] || continue
+      for v in _REPO_{OWNER,NAME}; do
+        for p in _{SRC,DIST}; do eval "${p}=\$${p}${v}"; done
+        for i in 0 1 -; do _SRCR=$(_fc "${_SRC}" $i)
+          case "$v" in *OWNER*) _DISTR="${_DIST}" ;; *) _DISTR=$(_fc "${_DIST}" $i) ;; esac
+          if [ -f "${_ITEM}" ]; then
+            grep -q "${_SRCR}" "${_ITEM}" && sed -i "s/${_SRCR}/${_DISTR}/g" "${_ITEM}"
+            grep -q "${_SRC_AUTHOR}" "${_ITEM}" && sed -i "s/${_SRC_AUTHOR}/${TERMUX_PKG_MAINTAINER}/g" "${_ITEM}" 
+          fi
+          case "$_ITEM" in *$_SRCR*) mv -f "$_ITEM" "${_ITEM//$_SRCR/$_DISTR}" ;; esac
+        done
+      done
+    done
+  unset _SRC _DIST _SRCR _DISTR _ITEM
+  termux_setup_rust
 }
 
 termux_step_make() {
-	SHELL_COMPLETIONS_DIR=$TERMUX_PKG_BUILDDIR/completions cargo build --jobs $TERMUX_PKG_MAKE_PROCESSES --target $CARGO_TARGET_NAME --release
+  SHELL_COMPLETIONS_DIR="$TERMUX_PKG_BUILDDIR/completions" \
+    cargo build \
+      --jobs "$TERMUX_PKG_MAKE_PROCESSES" \
+      --target "$CARGO_TARGET_NAME" \
+      --release
 }
 
 termux_step_make_install() {
-	local -A SHELLS=(
-		[zsh]="/site-functions"
-		[bash]="-completion/completions"
-		[fish]="/vendor_completions.d"
-	)
+  declare -A _SHELLS=(
+    ['z']='/site-functions'
+    ['ba']='-completion/completions'
+    ['fi']='/vendor_completions.d'
+  )
 
-	install -Dm755 -t $TERMUX_PREFIX/bin target/${CARGO_TARGET_NAME}/release/${REPO_NAME}
-
-	# Install completions
-	for SHELL in "${!SHELLS[@]}"; do
-		local FILE="${REPO_NAME}.${SHELL}"
-		[[ "$SHELL" == "zsh" ]] && FILE="_${REPO_NAME}"
-
-		install -Dm600 $TERMUX_PKG_BUILDDIR/completions/_${FILE} \
-			$TERMUX_PREFIX/share/${SHELL}${SHELLS[$SHELL]}/${FILE}
-	done
-
-	# install -Dm600 $TERMUX_PKG_BUILDDIR/completions/_${REPO_NAME} \
-	# 	$TERMUX_PREFIX/share/zsh/site-functions/_${REPO_NAME}
-	# install -Dm600 $TERMUX_PKG_BUILDDIR/completions/${REPO_NAME}.bash \
-	# 	$TERMUX_PREFIX/share/bash-completion/completions/${REPO_NAME}.bash
-	# install -Dm600 $TERMUX_PKG_BUILDDIR/completions/${REPO_NAME}.fish \
-	# 	$TERMUX_PREFIX/share/fish/vendor_completions.d/${REPO_NAME}.fish
+  install -Dm755 -t \
+    "$TERMUX_PREFIX/bin" \
+    "target/${CARGO_TARGET_NAME}/release/${_DIST_REPO_NAME}"
+  
+  for _SHELL in "${!_SHELLS[@]}"; do 
+    case "$_SHELL" in
+      z) _FILE="_${_DIST_REPO_NAME}" ;;
+      *) _FILE="${_DIST_REPO_NAME}.${_SHELL}sh" ;;
+    esac 
+    install -Dm600 \
+      "$TERMUX_PKG_BUILDDIR/completions/${_FILE}" \
+      "$TERMUX_PREFIX/share/${_SHELL}sh${_SHELLS[$_SHELL]}/${_FILE}"
+  done
+  
+  unset _SHELLS _SHELL _FILE
 }
