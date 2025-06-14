@@ -1,110 +1,81 @@
 #!/usr/bin/env bash
 
-[ -z "${BASH_VERSION:-}" ] && exit 1
-(return 0 2>/dev/null) && exit 1
-
 fetch() {
-  local url="${1:?}" && shift
-  local -a flags=("$@")
-  local -a cflags=(
-    --fail --location --retry-connrefused --styled-output --progress-bar
-    --retry 5 --retry-delay 5 --connect-timeout 30 --retry-max-time 120 
-    --speed-limit 1000 --speed-time 60
-  )
-  curl "${cflags[@]}" "${flags[@]}" "$url"
+	local type=${1:?}
+	local url=${2:?}
+
+	[[ "$url" =~ ^https://(/[^/]+)+$ ]] || url=https://${url}
+
+	local -a opts=(
+		--fail               # Consider 4xx and 5xx responses as failures
+		--retry 5            # Retry up to 5 times on transient failures
+		--retry-connrefused  # Also retry on refused connections
+		--retry-delay 5      # Wait 5 seconds between retries
+		--connect-timeout 30 # Wait at most 30 seconds for a connection to be established
+		--retry-max-time 120 # Stop retrying if it's still failing after 120 seconds
+		--speed-limit 1000   # Expect at least 1000 Bytes per second
+		--speed-time 60      # Fail if the minimum speed isn't met for at least 60 seconds
+		--location           # Follow redirects
+		--silent
+	)
+
+	curl ${opts[@]} ${url} | \
+	{
+		case "$type" in
+			-s) sha256sum | awk '{print $1}' ;;
+			-v) jq -r '.[0].name' | sed 's/^[vV]//' ;;
+		esac
+	}
 }
 
-finder() {
-  local dir="${1:?}"
-  mkdir -p "$dir" || return 1
-  
-  find -P "$dir" -mindepth 1 -type "${3:-d}" -iname "${2:-*}" -print -quit
+REPO_OWNER=MasterZeeno
+REPO_EMAIL=${REPO_OWNER,,}@outlook.com
+REPO_NAME=fancy
+REPO=${REPO_OWNER}/${REPO_NAME}
+DOMAIN=github.com
+TAGS_URL=https://api.${DOMAIN}/repos/${REPO}/tags
+
+TERMUX_PKG_HOMEPAGE=https://${DOMAIN}/${REPO}
+TERMUX_PKG_DESCRIPTION="A command-line tool to generate, analyze, convert and manipulate colors"
+TERMUX_PKG_LICENSE="MIT"
+TERMUX_PKG_LICENSE_FILE="LICENSE-MIT, LICENSE-APACHE"
+TERMUX_PKG_MAINTAINER="${REPO_OWNER} <${REPO_EMAIL}>"
+TERMUX_PKG_VERSION=$(fetch -v "${TAGS_URL}")
+TERMUX_PKG_SRCURL=${TERMUX_PKG_HOMEPAGE}/archive/refs/tags/v${TERMUX_PKG_VERSION}.tar.gz
+TERMUX_PKG_SHA256=$(fetch -s ${TERMUX_PKG_SRCURL})
+TERMUX_PKG_AUTO_UPDATE=true
+TERMUX_PKG_BUILD_IN_SRC=true
+
+termux_step_pre_configure() {
+	termux_setup_rust
 }
 
-latest_zip() {
-  fetch "$ANDROID_HOMEURL/${1:?}" --silent \
-    | grep -Eoim1 "${2:?}.*${PLATFORM}.*\.zip"
+termux_step_make() {
+	SHELL_COMPLETIONS_DIR=$TERMUX_PKG_BUILDDIR/completions cargo build --jobs $TERMUX_PKG_MAKE_PROCESSES --target $CARGO_TARGET_NAME --release
 }
 
-sticky_export() {
-  local var="${1:?}"
-  local val="'${2:?}'"
-  
-  if ! grep -q "export ${var}=${val}" "$SHELLRC"; then
-    sed -Ei "/^.*export ${var}=/d" "$SHELLRC"
-    echo "export ${var}=${val}" >> "$SHELLRC"
-    export "${var}=${val}"
-  fi
+termux_step_make_install() {
+	local -A SHELLS=(
+		[zsh]="/site-functions"
+		[bash]="-completion/completions"
+		[fish]="/vendor_completions.d"
+	)
+
+	install -Dm755 -t $TERMUX_PREFIX/bin target/${CARGO_TARGET_NAME}/release/${REPO_NAME}
+
+	# Install completions
+	for SHELL in "${!SHELLS[@]}"; do
+		local FILE="${REPO_NAME}.${SHELL}"
+		[[ "$SHELL" == "zsh" ]] && FILE="_${REPO_NAME}"
+
+		install -Dm600 $TERMUX_PKG_BUILDDIR/completions/_${FILE} \
+			$TERMUX_PREFIX/share/${SHELL}${SHELLS[$SHELL]}/${FILE}
+	done
+
+	# install -Dm600 $TERMUX_PKG_BUILDDIR/completions/_${REPO_NAME} \
+	# 	$TERMUX_PREFIX/share/zsh/site-functions/_${REPO_NAME}
+	# install -Dm600 $TERMUX_PKG_BUILDDIR/completions/${REPO_NAME}.bash \
+	# 	$TERMUX_PREFIX/share/bash-completion/completions/${REPO_NAME}.bash
+	# install -Dm600 $TERMUX_PKG_BUILDDIR/completions/${REPO_NAME}.fish \
+	# 	$TERMUX_PREFIX/share/fish/vendor_completions.d/${REPO_NAME}.fish
 }
-
-SHELLRC="$HOME/.${SHELL##*/}rc"
-ANDROID_TOOLS_ROOT="$HOME/.android"
-TMPDIR="${TMPDIR:-$HOME/.tmp}"
-
-PLATFORM=$(uname -s)
-SDK_REVISION=9123335
-NDK_REVISION=r27c
-TOOLS_VERSION=33.0.1
-
-[[ "$1" == "-f" || "$1" == "--force" ]] && \
-  rm -rf "$ANDROID_TOOLS_ROOT"
-
-mkdir -p "$ANDROID_TOOLS_ROOT" "$TMPDIR" || exit 1
-
-ANDROID_HOMEURL="https://developer.android.com"
-ANDROID_REPOURL="https://dl.google.com/android/repository"
-
-for VAR in SDK NDK; do
-  [[ ! -v "$VAR" || ! -e "${!VAR}" || \
-    -z "$(finder "$ANDROID_TOOLS_ROOT")" ]] || continue
-  
-  TOOLPATH="$ANDROID_TOOLS_ROOT/android-${VAR,,}"
-  mkdir -p "$TOOLPATH" || exit 1
-
-  if [[ "$VAR" == 'NDK' ]]; then
-    FILENAME="android-ndk-${NDK_REVISION}-${PLATFORM,,}"
-  else
-    FILENAME="commandlinetools-${PLATFORM,,}-${SDK_REVISION}_latest"
-  fi
-  
-  OUTPUTFILE="${TMPDIR}/${FILENAME}.zip"; RETRIES=0
-  
-  while [[ ! -s "$OUTPUTFILE" ]]; do
-    fetch "$ANDROID_REPOURL/${FILENAME}.zip" --output "$OUTPUTFILE"
-    ((RETRIES++)); ((RETRIES>3)) && return 1
-  done
-  
-  unzip -oq "$OUTPUTFILE" -d "$TOOLPATH"
-  TOOLDIR=$(finder "$TOOLPATH")
-  
-  if [[ "$VAR" == "NDK" ]]; then
-    mv -f "$TOOLDIR"/* "$TOOLPATH"/
-    rm -rf "$TOOLDIR" "$(finder "$TOOLPATH/sources" 'system')"
-  else
-    mkdir -p "$TOOLPATH/latest"
-    mv -f "$TOOLDIR"/* "$TOOLPATH/latest"/
-    mv -f "$TOOLPATH/latest" "$TOOLDIR"/
-  fi
-  
-  printf '%s\n' {'ANDROID_',}"${VAR}"{'_ROOT',} \
-    | while IFS= read -r XVAR; do
-      sticky_export "$XVAR" "$TOOLPATH"
-    done
-done
-
-sticky_export "ANDROID_HOME" "$ANDROID_SDK_ROOT"
-SDK_MANAGER=$(finder "$ANDROID_HOME" 'sdkmanager' f)
-
-[[ -x "$SDK_MANAGER" ]] || \
-  { echo "'sdkmanager' no execute permissions or not found"; exit 1; }
-
-yes | "$SDK_MANAGER" \
-  --sdk_root="$ANDROID_HOME" \
-  --licenses
-
-yes | "$SDK_MANAGER" \
-  --sdk_root="$ANDROID_HOME" \
-  "platform-tools" \
-  "build-tools;${TOOLS_VERSION}" \
-  "platforms;android-"{24,28,35}
-  
