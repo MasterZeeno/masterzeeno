@@ -1,3 +1,27 @@
+if [ "$(uname -o)" != "Android" ] && [ "$TERMUX_PREFIX" != *"com.termux"* ]; then
+  if ! command -v rustup &>/dev/null; then
+    SUDO="sudo"
+    if [ "$(id -u)" = "0" ]; then
+      SUDO=""
+    fi
+    if command -v apt-get &>/dev/null; then
+      $SUDO apt-get -yq update
+      $SUDO env DEBIAN_FRONTEND=noninteractive \
+        apt-get install -yq --no-install-recommends rustup
+    elif command -v pacman &>/dev/null; then
+      $SUDO pacman -Syq --needed --noconfirm rustup
+    fi
+
+    if [ $? -eq 1 ]; then
+      curl --proto '=https' --tlsv1.2 --retry 10 \
+        --retry-connrefused --location --silent --show-error \
+        --fail https://sh.rustup.rs | sh -s -- --default-toolchain none -y
+    fi
+
+    . $HOME/.cargo/env || return 1
+  fi
+fi
+
 _fc() {
   s="${1:?}" i="${2:-}"
   case "$i" in
